@@ -7,24 +7,121 @@
 //
 
 #import "AppDelegate.h"
-#import "NILLPjsua.h"
+
+#import <pjlib.h>
+#import <pjsua.h>
+#import <pj/log.h>
+#include "pjsua_app.h"
+#include "nill_acc_config.h"
+#include "pjsua_app_config.h"
+
+
+#define KEEP_ALIVE_INTERVAL 600
+
 
 @interface AppDelegate ()
+
 
 @end
 
 @implementation AppDelegate
 
+extern pj_bool_t app_restart;
+
+int app_setId(char *pj_optarg);
+int app_setRegistrar(char *pj_optarg);
+int app_setProxy(char *pj_optarg);
+int app_setUserName(char *pj_optarg);
+int app_setPassword(char *pj_optarg);
+
+static pjsua_app_cfg_t  app_cfg;
+static bool             isShuttingDown;
+
+static char           **restartArgv;
+static int              restartArgc;
+
+
+static void displayMsg(const char *msg)
+{
+    NSString *str = [NSString stringWithFormat:@"%s", msg];
+    dispatch_async(dispatch_get_main_queue(),^{
+        
+        NSLog(@"---displayMsg----%@",str);
+        
+    });
+}
 
 - (BOOL)application:(UIApplication *)application didFinishLaunchingWithOptions:(NSDictionary *)launchOptions {
     // Override point for customization after application launch.
     
+    
     // You should change 192.168.43.106 to the IP of your own Mac
-    startPjsip("iPhone", "192.168.12.132");
-    makeCall("sip:192.168.12.122:5080");
+//    startPjsip("10005", "192.168.12.122");
+//    makeCall("sip:192.168.12.126:5080");
     
     
     return YES;
+}
+
+- (BOOL) startNatUA2:(NSString*) peer
+{
+    // Start pjsua thread
+    [NSThread detachNewThreadSelector:@selector(startAppPJSua:) toTarget:self withObject:peer];
+    return true;
+}
+
+
+// pjsua start
+- (void)startAppPJSua:(id) arg
+{
+    
+    pj_status_t status;
+    const char **argv = pjsua_app_def_argv;
+    int argc = PJ_ARRAY_SIZE(pjsua_app_def_argv) -1;
+    
+    if (restartArgc) {
+        app_cfg.argc = restartArgc;
+        app_cfg.argv = restartArgv;
+    } else {
+        app_cfg.argc = argc;
+        app_cfg.argv = (char**)argv;
+    }
+    
+    app_default_cfg();
+    
+    NSString *callerId = [NSString stringWithFormat:@"sip:%@@%@",@"1004",@"192.168.12.122"];
+    app_setId((char *) [callerId UTF8String]);
+    
+    app_setRegistrar((char *) [@"192.168.12.122" UTF8String]);
+    app_setProxy((char *)[@"192.168.12.122" UTF8String]);
+    app_setUserName((char *)[@"1004" UTF8String]);
+    app_setPassword((char *)[@"123456" UTF8String]);
+    
+    
+    isShuttingDown = false;
+    displayMsg("Starting..");
+    
+    
+    while (!isShuttingDown) {
+        status = pjsua_app_init(&app_cfg);
+        if (status != PJ_SUCCESS) {
+            char errmsg[PJ_ERR_MSG_SIZE];
+            pj_strerror(status, errmsg, sizeof(errmsg));
+            displayMsg(errmsg);
+            pjsua_app_destroy();
+            return;
+        }
+        
+        status = pjsua_app_run(PJ_TRUE);
+        if (status != PJ_SUCCESS) {
+            char errmsg[PJ_ERR_MSG_SIZE];
+            pj_strerror(status, errmsg, sizeof(errmsg));
+            displayMsg(errmsg);
+        }
+        
+    }
+    
+   
 }
 
 - (void)applicationWillResignActive:(UIApplication *)application {
@@ -35,6 +132,34 @@
 - (void)applicationDidEnterBackground:(UIApplication *)application {
     // Use this method to release shared resources, save user data, invalidate timers, and store enough application state information to restore your application to its current state in case it is terminated later.
     // If your application supports background execution, this method is called instead of applicationWillTerminate: when the user quits.
+    
+    // keep pjsua thread alive
+    [[UIApplication sharedApplication] setKeepAliveTimeout:KEEP_ALIVE_INTERVAL handler: ^{
+        //[app performSelectorOnMainThread:@selector(keepAlive) withObject:nil waitUntilDone:YES];
+        [self keepAlive];
+    }];
+    
+}
+
+// keep alive
+- (void)keepAlive {
+    static pj_thread_desc a_thread_desc;
+    static pj_thread_t *a_thread;
+    int i;
+    
+    if (!pj_thread_is_registered()) {
+        pj_thread_register("ipjsua", a_thread_desc, &a_thread);
+    }
+    
+    /* Since iOS requires that the minimum keep alive interval is 600s,
+     * application needs to make sure that the account's registration
+     * timeout is long enough.
+     */
+    for (i = 0; i < (int)pjsua_acc_get_count(); ++i) {
+        if (pjsua_acc_is_valid(i)) {
+            pjsua_acc_set_registration(i, PJ_TRUE);
+        }
+    }
 }
 
 - (void)applicationWillEnterForeground:(UIApplication *)application {

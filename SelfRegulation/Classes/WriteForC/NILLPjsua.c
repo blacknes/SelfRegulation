@@ -53,7 +53,7 @@ int startPjsip(char *sipUser, char* sipDomain)
         // Init transport config structure
         pjsua_transport_config cfg;
         pjsua_transport_config_default(&cfg);
-        cfg.port = 5080;
+        cfg.port = 5060;
         
         // Add TCP transport.
         status = pjsua_transport_create(PJSIP_TRANSPORT_UDP, &cfg, NULL);
@@ -65,7 +65,7 @@ int startPjsip(char *sipUser, char* sipDomain)
         // Init transport config structure
         pjsua_transport_config cfg;
         pjsua_transport_config_default(&cfg);
-        cfg.port = 5080;
+        cfg.port = 5060;
         
         // Add TCP transport.
         status = pjsua_transport_create(PJSIP_TRANSPORT_TCP, &cfg, NULL);
@@ -76,23 +76,23 @@ int startPjsip(char *sipUser, char* sipDomain)
     status = pjsua_start();
     if (status != PJ_SUCCESS) error_exit("Error starting pjsua", status);
     
-    // Register the account on local sip server
-    {
-        pjsua_acc_config cfg;
-        
-        pjsua_acc_config_default(&cfg);
-        
-        char sipId[MAX_SIP_ID_LENGTH];
-        sprintf(sipId, "sip:%s@%s", sipUser, sipDomain);
-        cfg.id = pj_str(sipId);
-        
-        char regUri[MAX_SIP_REG_URI_LENGTH];
-        sprintf(regUri, "sip:%s", sipDomain);
-        cfg.reg_uri = pj_str(regUri);
-        
-        status = pjsua_acc_add(&cfg, PJ_TRUE, &acc_id);
-        if (status != PJ_SUCCESS) error_exit("Error adding account", status);
-    }
+//    // Register the account on local sip server
+//    {
+//        pjsua_acc_config cfg;
+//        
+//        pjsua_acc_config_default(&cfg);
+//        
+//        char sipId[MAX_SIP_ID_LENGTH];
+//        sprintf(sipId, "sip:%s@%s", sipUser, sipDomain);
+//        cfg.id = pj_str(sipId);
+//        
+//        char regUri[MAX_SIP_REG_URI_LENGTH];
+//        sprintf(regUri, "sip:%s", sipDomain);
+//        cfg.reg_uri = pj_str(regUri);
+//        
+//        status = pjsua_acc_add(&cfg, PJ_TRUE, &acc_id);
+//        if (status != PJ_SUCCESS) error_exit("Error adding account", status);
+//    }
     
     return 0;
 }
@@ -151,6 +151,8 @@ static void error_exit(const char *title, pj_status_t status)
     exit(1);
 }
 
+/* call method */
+/* making call */
 void makeCall(char* destUri)
 {
     pj_status_t status;
